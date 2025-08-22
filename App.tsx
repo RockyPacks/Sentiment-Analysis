@@ -6,6 +6,7 @@ import { SentimentChart } from './components/SentimentChart';
 import { ScoreGauge } from './components/ScoreGauge';
 import { SentimentCard } from './components/SentimentCard';
 import { LoadingSpinner } from './components/LoadingSpinner';
+import { ExportControls } from './components/ExportControls';
 
 const App: React.FC = () => {
   const [text, setText] = useState<string>('');
@@ -14,10 +15,18 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const handleAnalyze = useCallback(async () => {
-    if (!text.trim()) {
+    const trimmedText = text.trim();
+    if (!trimmedText) {
       setError('Please enter some text to analyze.');
       return;
     }
+
+    const wordCount = trimmedText.split(/\s+/).filter(Boolean).length;
+    if (wordCount < 3) {
+      setError('Please enter at least 3 words for a meaningful analysis.');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     setAnalysisResult(null);
@@ -25,7 +34,9 @@ const App: React.FC = () => {
       const result = await analyzeSentiment(text);
       setAnalysisResult(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+      setError(`Analysis failed: ${errorMessage} Please try again.`);
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -85,7 +96,10 @@ const App: React.FC = () => {
             )}
             {analysisResult && (
               <div className="w-full animate-fade-in space-y-6">
-                 <h2 className="text-2xl font-semibold text-center text-teal-400 mb-4">Analysis Results</h2>
+                 <div className="flex justify-between items-center">
+                    <h2 className="text-2xl font-semibold text-teal-400">Analysis Results</h2>
+                    <ExportControls data={analysisResult} />
+                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <SentimentCard sentiment={analysisResult.overallSentiment} />
                     <ScoreGauge score={analysisResult.sentimentScore} />
