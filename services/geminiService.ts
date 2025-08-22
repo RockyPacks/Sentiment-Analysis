@@ -51,7 +51,7 @@ export const analyzeSentiment = async (text: string): Promise<SentimentAnalysisR
       model: "gemini-2.5-flash",
       contents: `Analyze the sentiment of the following text: "${text}"`,
       config: {
-        systemInstruction: "You are an expert sentiment analysis AI. Analyze the provided text and provide a detailed breakdown of its emotional tone. Your response must be a JSON object that strictly adheres to the provided schema. Do not include any explanatory text outside of the JSON object.",
+        systemInstruction: "You are an expert sentiment analysis AI. Analyze the provided text and provide a detailed breakdown of its emotional tone. If the text is nonsensical, too short for analysis, or not in a language you can process, return a 'Neutral' sentiment, a score of 0, an empty emotions array, and a summary explaining why a proper analysis could not be performed. Your response must always be a JSON object that strictly adheres to the provided schema. Do not include any explanatory text outside of the JSON object.",
         responseMimeType: "application/json",
         responseSchema: responseSchema,
         temperature: 0.2,
@@ -59,6 +59,10 @@ export const analyzeSentiment = async (text: string): Promise<SentimentAnalysisR
     });
 
     const jsonText = response.text.trim();
+    if (!jsonText) {
+        throw new Error("The API returned an empty response. This may be due to the input text triggering safety filters.");
+    }
+
     const result = JSON.parse(jsonText);
     
     // Basic validation to ensure the result matches the expected structure
@@ -68,13 +72,16 @@ export const analyzeSentiment = async (text: string): Promise<SentimentAnalysisR
       !result.summary ||
       !Array.isArray(result.emotions)
     ) {
-      throw new Error('Invalid response structure from API.');
+      throw new Error('Invalid response structure from API. The format of the data is not as expected.');
     }
     
     return result as SentimentAnalysisResult;
 
   } catch (error) {
     console.error("Error analyzing sentiment:", error);
+    if (error instanceof SyntaxError) {
+        throw new Error("Failed to parse the API response. The server may have returned an unexpected format.");
+    }
     if (error instanceof Error) {
         throw new Error(`Failed to analyze sentiment: ${error.message}`);
     }
