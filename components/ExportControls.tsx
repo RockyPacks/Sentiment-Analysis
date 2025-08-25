@@ -132,6 +132,67 @@ export const ExportControls: React.FC<ExportControlsProps> = ({ data }) => {
     }
   }, [data]);
 
+  const handleWordExport = useCallback(() => {
+    if (!data) return;
+    try {
+        const emotionsTable = data.emotions.length > 0
+            ? `
+                <table style="border-collapse: collapse; width: 100%;" border="1">
+                    <thead>
+                        <tr style="background-color: #f2f2f2;">
+                            <th style="padding: 8px; text-align: left;">Emotion</th>
+                            <th style="padding: 8px; text-align: left;">Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.emotions.map(e => `
+                            <tr>
+                                <td style="padding: 8px;">${e.name}</td>
+                                <td style="padding: 8px;">${e.score.toFixed(3)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `
+            : '<p>No specific emotions detected.</p>';
+
+        const htmlContent = `
+            <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+            <head><meta charset='utf-8'><title>Sentiment Analysis Report</title></head>
+            <body>
+                <h1>Sentiment Analysis Report</h1>
+                <p>Generated on: ${new Date().toLocaleString()}</p>
+                <hr/>
+                <h2>Overall Sentiment</h2>
+                <p>${data.overallSentiment}</p>
+                <h2>Sentiment Score</h2>
+                <p>${data.sentimentScore.toFixed(3)}</p>
+                <h2>Summary</h2>
+                <p>${data.summary.replace(/\n/g, '<br />')}</p>
+                <h2>Emotion Breakdown</h2>
+                ${emotionsTable}
+            </body>
+            </html>
+        `;
+        
+        const blob = new Blob([htmlContent], { type: 'application/msword' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", "sentiment-analysis.doc");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+    } catch (error) {
+        console.error("Failed to export Word document:", error);
+        alert("An error occurred while exporting to Word. Please check the console for details.");
+    } finally {
+        setIsOpen(false);
+    }
+  }, [data]);
+
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -184,6 +245,13 @@ export const ExportControls: React.FC<ExportControlsProps> = ({ data }) => {
               role="menuitem"
             >
               Export as PDF
+            </button>
+             <button
+              onClick={handleWordExport}
+              className="w-full text-left block px-4 py-2 text-sm text-slate-300 hover:bg-teal-600/30 hover:text-teal-300"
+              role="menuitem"
+            >
+              Export as Word (.doc)
             </button>
           </div>
         </div>

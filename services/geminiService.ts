@@ -1,6 +1,5 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
-import type { SentimentAnalysisResult } from '../types';
+import type { SentimentAnalysisResult, Review } from '../types';
 
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable not set");
@@ -8,7 +7,7 @@ if (!process.env.API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const responseSchema = {
+const sentimentResponseSchema = {
   type: Type.OBJECT,
   properties: {
     overallSentiment: { 
@@ -45,15 +44,37 @@ const responseSchema = {
   required: ['overallSentiment', 'sentimentScore', 'summary', 'emotions']
 };
 
+const reviewGenerationSchema = {
+    type: Type.ARRAY,
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            reviewerName: {
+                type: Type.STRING,
+                description: "A plausible, common-sounding name for the reviewer."
+            },
+            rating: {
+                type: Type.NUMBER,
+                description: "An integer rating from 1 to 5."
+            },
+            reviewText: {
+                type: Type.STRING,
+                description: "The full text of the review. Should be detailed and sound authentic."
+            }
+        },
+        required: ['reviewerName', 'rating', 'reviewText']
+    }
+};
+
 export const analyzeSentiment = async (text: string): Promise<SentimentAnalysisResult> => {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Analyze the sentiment of the following text: "${text}"`,
+      contents: text,
       config: {
         systemInstruction: "You are an expert sentiment analysis AI. Analyze the provided text and provide a detailed breakdown of its emotional tone. If the text is nonsensical, too short for analysis, or not in a language you can process, return a 'Neutral' sentiment, a score of 0, an empty emotions array, and a summary explaining why a proper analysis could not be performed. Your response must always be a JSON object that strictly adheres to the provided schema. Do not include any explanatory text outside of the JSON object.",
         responseMimeType: "application/json",
-        responseSchema: responseSchema,
+        responseSchema: sentimentResponseSchema,
         temperature: 0.2,
       },
     });
@@ -65,7 +86,6 @@ export const analyzeSentiment = async (text: string): Promise<SentimentAnalysisR
 
     const result = JSON.parse(jsonText);
     
-    // Basic validation to ensure the result matches the expected structure
     if (
       !result.overallSentiment ||
       typeof result.sentimentScore !== 'number' ||
@@ -79,6 +99,9 @@ export const analyzeSentiment = async (text: string): Promise<SentimentAnalysisR
 
   } catch (error) {
     console.error("Error analyzing sentiment:", error);
+    if (error instanceof Error && error.message.includes("Rpc failed due to xhr error")) {
+        throw new Error("A network or permission error occurred. This could be due to API key restrictions (like HTTP referrer), CORS issues, or a network problem. Please check your API key configuration and network connection.");
+    }
     if (error instanceof SyntaxError) {
         throw new Error("Failed to parse the API response. The server may have returned an unexpected format.");
     }
@@ -87,4 +110,45 @@ export const analyzeSentiment = async (text: string): Promise<SentimentAnalysisR
     }
     throw new Error('An unknown error occurred during sentiment analysis.');
   }
+};
+
+export const generateReviews = async (topic: string): Promise<Review[]> => {
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: topic,
+            config: {
+                systemInstruction: "You are a creative AI that generates realistic product and media reviews. For the given topic, generate exactly 5 diverse reviews. Include a mix of positive, negative, and neutral/mixed opinions. Provide integer ratings from 1 to 5 stars. Ensure the review text is realistic, detailed (between 50 and 150 words), and sounds like it was written by different people. Your response must be a JSON array of review objects, strictly adhering to the provided schema. Do not include any text outside the JSON array.",
+                responseMimeType: "application/json",
+                responseSchema: reviewGenerationSchema,
+                temperature: 0.8,
+            }
+        });
+
+        const jsonText = response.text.trim();
+        if (!jsonText) {
+            throw new Error("The API returned an empty response for review generation.");
+        }
+
+        const result = JSON.parse(jsonText);
+
+        if (!Array.isArray(result)) {
+            throw new Error("Invalid review response structure. Expected an array.");
+        }
+
+        return result as Review[];
+
+    } catch (error) {
+        console.error("Error generating reviews:", error);
+        if (error instanceof Error && error.message.includes("Rpc failed due to xhr error")) {
+            throw new Error("A network or permission error occurred while generating reviews. Please check your API key configuration and network connection.");
+        }
+        if (error instanceof SyntaxError) {
+            throw new Error("Failed to parse the API response for reviews.");
+        }
+        if (error instanceof Error) {
+            throw new Error(`Failed to generate reviews: ${error.message}`);
+        }
+        throw new Error('An unknown error occurred during review generation.');
+    }
 };
