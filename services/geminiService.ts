@@ -66,6 +66,16 @@ const reviewGenerationSchema = {
     }
 };
 
+const reviewExtractionSchema = {
+    type: Type.ARRAY,
+    description: "A list of individual review texts found in the source document.",
+    items: {
+        type: Type.STRING,
+        description: "The full text of a single, complete review."
+    }
+};
+
+
 export const analyzeSentiment = async (text: string): Promise<SentimentAnalysisResult> => {
   try {
     const response = await ai.models.generateContent({
@@ -150,5 +160,46 @@ export const generateReviews = async (topic: string): Promise<Review[]> => {
             throw new Error(`Failed to generate reviews: ${error.message}`);
         }
         throw new Error('An unknown error occurred during review generation.');
+    }
+};
+
+export const extractReviewsFromText = async (text: string): Promise<string[]> => {
+    // If text is very short, assume it's a single review to save API calls.
+    if (text.trim().split(/\s+/).length < 50) {
+        return [text];
+    }
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: text,
+            config: {
+                systemInstruction: "You are an expert text parser. Your task is to analyze the provided text and meticulously extract each individual review or distinct comment. Return the reviews as a JSON array of strings. Each string in the array must be a complete, self-contained review. If the text appears to be a single continuous review, return an array containing that one string. If no discernible reviews or comments are present, return an empty array. Do not add any commentary or text outside of the JSON array.",
+                responseMimeType: "application/json",
+                responseSchema: reviewExtractionSchema,
+                temperature: 0.1,
+            }
+        });
+
+        const jsonText = response.text.trim();
+        if (!jsonText) {
+            return [text]; // Fallback: if API returns empty, treat the whole text as one review
+        }
+        
+        const result = JSON.parse(jsonText);
+        if (!Array.isArray(result) || !result.every(item => typeof item === 'string')) {
+            console.warn('API returned a non-string-array structure for review extraction, falling back to single review.');
+            return [text];
+        }
+
+        if (result.length === 0) {
+            return [text]; // Fallback: if Gemini finds no reviews, treat the whole text as one review
+        }
+
+        return result;
+
+    } catch (error) {
+        console.error("Error extracting reviews from text, falling back to single review:", error);
+        // Fallback to treating the entire text as a single review in case of any error
+        return [text];
     }
 };

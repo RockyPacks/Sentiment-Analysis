@@ -25,3 +25,16 @@ export interface AnalysisHistoryItem {
   sourceText: string;
   analysis: SentimentAnalysisResult;
 }
+
+// New types for Batch Analyzer
+export interface AnalyzedReview {
+  id: string; // Unique ID for key prop
+  sourceFileName: string;
+  sourceText: string;
+  analysis: SentimentAnalysisResult;
+  error?: string;
+}
+
+export interface ProcessingFile extends File {
+  id: string;
+}

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ManualAnalyzer } from './components/ManualAnalyzer';
 import { ReviewAggregator } from './components/ReviewAggregator';
+import { BatchAnalyzer } from './components/BatchAnalyzer';
 
-type Page = 'aggregator' | 'manual';
+type Page = 'aggregator' | 'manual' | 'batch';
 
 const App: React.FC = () => {
   const [page, setPage] = useState<Page>('aggregator');
@@ -42,12 +43,20 @@ const App: React.FC = () => {
             >
               Manual Analyzer
             </button>
+             <button
+              onClick={() => setPage('batch')}
+              className={navButtonClasses(page === 'batch')}
+              aria-current={page === 'batch' ? 'page' : undefined}
+            >
+              Batch Analyzer
+            </button>
           </div>
         </nav>
 
         <main>
           {page === 'aggregator' && <ReviewAggregator />}
           {page === 'manual' && <ManualAnalyzer />}
+          {page === 'batch' && <BatchAnalyzer />}
         </main>
       </div>
     </div>
